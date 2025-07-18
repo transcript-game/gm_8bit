@@ -12,7 +12,7 @@
 #include "net.h"
 #include "thirdparty.h"
 #include "steam_voice.h"
-#include "eightbit_state.h"
+#include "transcript_state.h"
 #include <GarrysMod/Symbol.hpp>
 #include <cstdint>
 #include "opus_framedecoder.h"
@@ -44,7 +44,7 @@ static char decompressedBuffer[20 * 1024];
 static char recompressBuffer[20 * 1024];
 
 Net* net_handl = nullptr;
-EightbitState* g_eightbit = nullptr;
+transcriptState* g_transcript = nullptr;
 
 typedef void (*SV_BroadcastVoiceData)(IClient* cl, int nBytes, char* data, int64 xuid);
 Detouring::Hook detour_BroadcastVoiceData;
@@ -61,8 +61,8 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 	}
 #endif
 
-	auto& afflicted_players = g_eightbit->afflictedPlayers;
-	if (g_eightbit->broadcastPackets && nBytes > sizeof(uint64_t)) {
+	auto& afflicted_players = g_transcript->afflictedPlayers;
+	if (g_transcript->broadcastPackets && nBytes > sizeof(uint64_t)) {
 		//Get the user's steamid64, put it at the beginning of the buffer.
 		//Notice that we don't use the conveniently provided one in the voice packet. The client can manipulate that one.
 
@@ -80,7 +80,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		std::memcpy(decompressedBuffer + sizeof(uint64_t), data + sizeof(uint64_t), toCopy);
 
 		//Finally we'll broadcast our new packet
- 		net_handl->SendPacket(g_eightbit->ip.c_str(), g_eightbit->port, decompressedBuffer, nBytes);
+ 		net_handl->SendPacket(g_transcript->ip.c_str(), g_transcript->port, decompressedBuffer, nBytes);
 	}
 
 	if (afflicted_players.find(uid) != afflicted_players.end()) {
@@ -105,10 +105,10 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		int eff = std::get<1>(afflicted_players.at(uid));
 		switch (eff) {
 		case AudioEffects::EFF_BITCRUSH:
-			AudioEffects::BitCrush((uint16_t*)&decompressedBuffer, samples, g_eightbit->crushFactor, g_eightbit->gainFactor);
+			AudioEffects::BitCrush((uint16_t*)&decompressedBuffer, samples, g_transcript->crushFactor, g_transcript->gainFactor);
 			break;
 		case AudioEffects::EFF_DESAMPLE:
-			AudioEffects::Desample((uint16_t*)&decompressedBuffer, samples, g_eightbit->desampleRate);
+			AudioEffects::Desample((uint16_t*)&decompressedBuffer, samples, g_transcript->desampleRate);
 			break;
 		default:
 			break;
@@ -133,46 +133,46 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 	}
 }
 
-LUA_FUNCTION_STATIC(eightbit_crush) {
-	g_eightbit->crushFactor = (int)LUA->GetNumber(1);
+LUA_FUNCTION_STATIC(transcript_crush) {
+	g_transcript->crushFactor = (int)LUA->GetNumber(1);
 	return 0;
 }
 
-LUA_FUNCTION_STATIC(eightbit_gain) {
-	g_eightbit->gainFactor = (float)LUA->GetNumber(1);
+LUA_FUNCTION_STATIC(transcript_gain) {
+	g_transcript->gainFactor = (float)LUA->GetNumber(1);
 	return 0;
 }
 
-LUA_FUNCTION_STATIC(eightbit_setbroadcastip) {
-	g_eightbit->ip = std::string(LUA->GetString());
+LUA_FUNCTION_STATIC(transcript_setbroadcastip) {
+	g_transcript->ip = std::string(LUA->GetString());
 	return 0;
 }
 
-LUA_FUNCTION_STATIC(eightbit_setbroadcastport) {
-	g_eightbit->port = (uint16_t)LUA->GetNumber(1);
+LUA_FUNCTION_STATIC(transcript_setbroadcastport) {
+	g_transcript->port = (uint16_t)LUA->GetNumber(1);
 	return 0;
 }
 
-LUA_FUNCTION_STATIC(eightbit_broadcast) {
-	g_eightbit->broadcastPackets = LUA->GetBool(1);
+LUA_FUNCTION_STATIC(transcript_broadcast) {
+	g_transcript->broadcastPackets = LUA->GetBool(1);
 	return 0;
 }
 
-LUA_FUNCTION_STATIC(eightbit_getcrush) {
-	LUA->PushNumber(g_eightbit->crushFactor);
+LUA_FUNCTION_STATIC(transcript_getcrush) {
+	LUA->PushNumber(g_transcript->crushFactor);
 	return 1;
 }
 
-LUA_FUNCTION_STATIC(eightbit_setdesamplerate) {
-	g_eightbit->desampleRate = (int)LUA->GetNumber(1);
+LUA_FUNCTION_STATIC(transcript_setdesamplerate) {
+	g_transcript->desampleRate = (int)LUA->GetNumber(1);
 	return 0;
 }
 
-LUA_FUNCTION_STATIC(eightbit_enableEffect) {
+LUA_FUNCTION_STATIC(transcript_enableEffect) {
 	int id = LUA->GetNumber(1);
 	int eff = LUA->GetNumber(2);
 
-	auto& afflicted_players = g_eightbit->afflictedPlayers;
+	auto& afflicted_players = g_transcript->afflictedPlayers;
 	if (afflicted_players.find(id) != afflicted_players.end()) {
 		if (eff == AudioEffects::EFF_NONE) {
 			IVoiceCodec* codec = std::get<0>(afflicted_players.at(id));
@@ -196,7 +196,7 @@ LUA_FUNCTION_STATIC(eightbit_enableEffect) {
 
 GMOD_MODULE_OPEN()
 {
-	g_eightbit = new EightbitState();
+	g_transcript = new transcriptState();
 
 	SourceSDK::ModuleLoader engine_loader("engine");
 	SymbolFinder symfinder;
@@ -219,38 +219,38 @@ GMOD_MODULE_OPEN()
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 
-	LUA->PushString("eightbit");
+	LUA->PushString("transcript");
 	LUA->CreateTable();
 		LUA->PushString("SetCrushFactor");
-		LUA->PushCFunction(eightbit_crush);
+		LUA->PushCFunction(transcript_crush);
 		LUA->SetTable(-3);
 
 		LUA->PushString("GetCrushFactor");
-		LUA->PushCFunction(eightbit_getcrush);
+		LUA->PushCFunction(transcript_getcrush);
 		LUA->SetTable(-3);
 
 		LUA->PushString("EnableEffect");
-		LUA->PushCFunction(eightbit_enableEffect);
+		LUA->PushCFunction(transcript_enableEffect);
 		LUA->SetTable(-3);
 
 		LUA->PushString("EnableBroadcast");
-		LUA->PushCFunction(eightbit_broadcast);
+		LUA->PushCFunction(transcript_broadcast);
 		LUA->SetTable(-3);
 
 		LUA->PushString("SetGainFactor");
-		LUA->PushCFunction(eightbit_gain);
+		LUA->PushCFunction(transcript_gain);
 		LUA->SetTable(-3);
 
 		LUA->PushString("SetDesampleRate");
-		LUA->PushCFunction(eightbit_setdesamplerate);
+		LUA->PushCFunction(transcript_setdesamplerate);
 		LUA->SetTable(-3);
 
 		LUA->PushString("SetBroadcastIP");
-		LUA->PushCFunction(eightbit_setbroadcastip);
+		LUA->PushCFunction(transcript_setbroadcastip);
 		LUA->SetTable(-3);
 
 		LUA->PushString("SetBroadcastPort");
-		LUA->PushCFunction(eightbit_setbroadcastport);
+		LUA->PushCFunction(transcript_setbroadcastport);
 		LUA->SetTable(-3);
 
 		LUA->PushString("EFF_NONE");
@@ -281,7 +281,7 @@ GMOD_MODULE_CLOSE()
 	detour_BroadcastVoiceData.Disable();
 	detour_BroadcastVoiceData.Destroy();
 
-	for (auto& p : g_eightbit->afflictedPlayers) {
+	for (auto& p : g_transcript->afflictedPlayers) {
 		IVoiceCodec* codec = std::get<0>(p.second);
 		if (codec != nullptr) {
 			delete codec;
@@ -289,7 +289,7 @@ GMOD_MODULE_CLOSE()
 	}
 
 	delete net_handl;
-	delete g_eightbit;
+	delete g_transcript;
 
 	return 0;
 }

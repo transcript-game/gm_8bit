@@ -48,14 +48,14 @@ jobs:
             - name: Upload artifact Linux x86
               uses: actions/upload-artifact@v4
               with:
-                  name: gmsv_eightbit_linux.dll
-                  path: projects/linux/gmake/x86/ReleaseWithSymbols/gmsv_eightbit_linux.dll
+                  name: gmsv_transcript_linux.dll
+                  path: projects/linux/gmake/x86/ReleaseWithSymbols/gmsv_transcript_linux.dll
 
             - name: Upload artifact Linux x86_64
               uses: actions/upload-artifact@v4
               with:
-                  name: gmsv_eightbit_linux64.dll
-                  path: projects/linux/gmake/x86_64/ReleaseWithSymbols/gmsv_eightbit_linux64.dll
+                  name: gmsv_transcript_linux64.dll
+                  path: projects/linux/gmake/x86_64/ReleaseWithSymbols/gmsv_transcript_linux64.dll
 
     build-windows:
         runs-on: windows-2022
@@ -90,26 +90,26 @@ jobs:
               run: |
                   cd projects/windows/vs2022
                   $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -prerelease -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe
-                  & $msbuild eightbit.sln /p:Configuration=ReleaseWithSymbols /p:Platform=Win32
+                  & $msbuild transcript.sln /p:Configuration=ReleaseWithSymbols /p:Platform=Win32
 
             - name: Upload artifact Windows x86
               uses: actions/upload-artifact@v4
               with:
-                  name: gmsv_eightbit_win32.dll
-                  path: projects/windows/vs2022/x86/ReleaseWithSymbols/gmsv_eightbit_win32.dll
+                  name: gmsv_transcript_win32.dll
+                  path: projects/windows/vs2022/x86/ReleaseWithSymbols/gmsv_transcript_win32.dll
 
             - name: Build x64
               shell: pwsh
               run: |
                   cd projects/windows/vs2022
                   $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -prerelease -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe
-                  & $msbuild eightbit.sln /p:Configuration=ReleaseWithSymbols /p:Platform=x64
+                  & $msbuild transcript.sln /p:Configuration=ReleaseWithSymbols /p:Platform=x64
 
             - name: Upload artifact Windows x64
               uses: actions/upload-artifact@v4
               with:
-                  name: gmsv_eightbit_win64.dll
-                  path: projects/windows/vs2022/x86_64/ReleaseWithSymbols/gmsv_eightbit_win64.dll
+                  name: gmsv_transcript_win64.dll
+                  path: projects/windows/vs2022/x86_64/ReleaseWithSymbols/gmsv_transcript_win64.dll
 
     release:
         name: Publish Release
@@ -124,25 +124,25 @@ jobs:
             - name: Download Linux 32‑bit DLL
               uses: actions/download-artifact@v4
               with:
-                  name: gmsv_eightbit_linux.dll
+                  name: gmsv_transcript_linux.dll
                   path: release/linux32
 
             - name: Download Linux 64‑bit DLL
               uses: actions/download-artifact@v4
               with:
-                  name: gmsv_eightbit_linux64.dll
+                  name: gmsv_transcript_linux64.dll
                   path: release/linux64
 
             - name: Download Windows 32‑bit DLL
               uses: actions/download-artifact@v4
               with:
-                  name: gmsv_eightbit_win32.dll
+                  name: gmsv_transcript_win32.dll
                   path: release/win32
 
             - name: Download Windows 64‑bit DLL
               uses: actions/download-artifact@v4
               with:
-                  name: gmsv_eightbit_win64.dll
+                  name: gmsv_transcript_win64.dll
                   path: release/win64
 
             - name: Create Release with Assets
@@ -155,9 +155,9 @@ jobs:
 
                       Download the appropriate DLL for your platform and place it in garrysmod/lua/bin/
                   files: |
-                      release/linux32/gmsv_eightbit_linux.dll
-                      release/linux64/gmsv_eightbit_linux64.dll
-                      release/win32/gmsv_eightbit_win32.dll
-                      release/win64/gmsv_eightbit_win64.dll
+                      release/linux32/gmsv_transcript_linux.dll
+                      release/linux64/gmsv_transcript_linux64.dll
+                      release/win32/gmsv_transcript_win32.dll
+                      release/win64/gmsv_transcript_win64.dll
                   draft: false
                   prerelease: false

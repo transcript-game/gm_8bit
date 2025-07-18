@@ -2,7 +2,7 @@
 #include <string>
 #include <unordered_map>
 
-struct EightbitState {
+struct transcriptState {
 	int crushFactor = 350;
 	float gainFactor = 1.2;
 	bool broadcastPackets = false;

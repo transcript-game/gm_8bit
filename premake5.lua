@@ -8,7 +8,7 @@ local gmcommon = assert(_OPTIONS.gmcommon or os.getenv("GARRYSMOD_COMMON"),
 	"you didn't provide a path to your garrysmod_common (https://github.com/danielga/garrysmod_common) directory")
 include(gmcommon .. "/generator.v3.lua")
 
-CreateWorkspace({name = "eightbit"})
+CreateWorkspace({name = "transcript"})
 	CreateProject({serverside = true})
 		IncludeSDKCommon()
 		IncludeSDKTier0()
