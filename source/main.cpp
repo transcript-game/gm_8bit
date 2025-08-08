@@ -14,6 +14,7 @@
 #include "thirdparty.h"
 #include "steam_voice.h"
 #include "transcript_state.h"
+#include "recorder.h"
 #include <GarrysMod/Symbol.hpp>
 #include <cstdint>
 #include "opus_framedecoder.h"
@@ -107,6 +108,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		info.started = true;
 		g_transcript->currentlySpeaking.insert(uid);
 		std::cout << "[transcript] Player " << uid << " START speaking (" << nBytes << " bytes)" << std::endl;
+		g_transcript->recorder.Start(uid, 24000);
 	}
 
 	// Periodically scan active speakers to emit STOP when timed out.
@@ -124,6 +126,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 			if (g_transcript->currentlySpeaking.find(sid) != g_transcript->currentlySpeaking.end()) {
 				std::cout << "[transcript] Player " << sid << " STOP speaking (timeout)" << std::endl;
 				g_transcript->currentlySpeaking.erase(sid);
+				g_transcript->recorder.Stop(sid);
 			}
 			sinfo.started = false; // reset; retains lastPacket for potential quick restart
 		}
@@ -138,6 +141,10 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 
 		int bytesDecompressed = SteamVoice::DecompressIntoBuffer(codec, data, nBytes, decompressedBuffer, sizeof(decompressedBuffer));
 		int samples = bytesDecompressed / 2;
+		// Submit raw PCM for background encoding (mono 16-bit). Decompressed buffer starts with PCM samples.
+		if (samples > 0) {
+			g_transcript->recorder.SubmitPCM(uid, reinterpret_cast<int16_t*>(decompressedBuffer), samples, 24000);
+		}
 		if (bytesDecompressed <= 0) {
 			//Just hit the trampoline at this point.
 			return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);

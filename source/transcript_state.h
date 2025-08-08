@@ -2,6 +2,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include "recorder.h"
 
 struct transcriptState {
 	int crushFactor = 350;
@@ -13,4 +14,5 @@ struct transcriptState {
 	std::unordered_map<int, std::tuple<IVoiceCodec*, int>> afflictedPlayers;
 	//Tracks which userids we currently consider to be actively sending voice data
 	std::unordered_set<int> currentlySpeaking;
+	RecorderManager recorder;
 };
