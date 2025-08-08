@@ -7,6 +7,7 @@
 #include <iostream>
 #include <iclient.h>
 #include <unordered_map>
+#include <chrono>
 #include "ivoicecodec.h"
 #include "audio_effects.h"
 #include "net.h"
@@ -90,29 +91,41 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
  		net_handl->SendPacket(g_transcript->ip.c_str(), g_transcript->port, decompressedBuffer, nBytes);
 	}
 
-	// Speaking state tracking: mark a user as speaking when we see a non-trivial packet, clear when only header-size or silence for several consecutive packets.
-	// We'll treat packets smaller than STEAM_PCKT_SZ as potential end (could be keepalive). We'll debounce with a small counter.
-	struct SpeakState { int silenceStreak = 0; };
-	static std::unordered_map<int, SpeakState> speakState;
-	const int silenceThreshold = 8; // number of consecutive small packets before declaring stop
-	bool packetHasAudio = (nBytes > (int)STEAM_PCKT_SZ); // heuristic
+	// Speaking state tracking using inactivity timeout.
+	// Rationale: once a player stops talking, no further packets arrive, so silence streaks never accumulate.
+	// We'll mark START on first "audio" packet (heuristic: size > header) and mark STOP when no packets seen for timeout.
+	using Clock = std::chrono::steady_clock;
+	struct SpeakInfo { Clock::time_point lastPacket; bool started = false; };
+	static std::unordered_map<int, SpeakInfo> speakInfo;
+	static const std::chrono::milliseconds stopTimeout(1200); // 1.2s of inactivity -> STOP
+	bool packetHasAudio = nBytes > (int)STEAM_PCKT_SZ; // crude heuristic
+	Clock::time_point now = Clock::now();
 
-	if (packetHasAudio) {
-		if (g_transcript->currentlySpeaking.find(uid) == g_transcript->currentlySpeaking.end()) {
-			std::cout << "[transcript] Player " << uid << " START speaking (" << nBytes << " bytes)" << std::endl;
-			g_transcript->currentlySpeaking.insert(uid);
-		}
-		speakState[uid].silenceStreak = 0;
-	} else {
-		// increment streak
-		SpeakState &st = speakState[uid];
-		st.silenceStreak++;
-		if (st.silenceStreak >= silenceThreshold) {
-			if (g_transcript->currentlySpeaking.find(uid) != g_transcript->currentlySpeaking.end()) {
-				std::cout << "[transcript] Player " << uid << " STOP speaking (small packets)" << std::endl;
-				g_transcript->currentlySpeaking.erase(uid);
+	SpeakInfo &info = speakInfo[uid];
+	info.lastPacket = now; // any packet counts as activity (even small keepalives)
+	if (packetHasAudio && !info.started) {
+		info.started = true;
+		g_transcript->currentlySpeaking.insert(uid);
+		std::cout << "[transcript] Player " << uid << " START speaking (" << nBytes << " bytes)" << std::endl;
+	}
+
+	// Periodically scan active speakers to emit STOP when timed out.
+	static Clock::time_point lastSweep = Clock::now();
+	if (now - lastSweep > std::chrono::milliseconds(300)) { // sweep every 300ms
+		lastSweep = now;
+		std::vector<int> toStop;
+		for (auto it = speakInfo.begin(); it != speakInfo.end(); ++it) {
+			if (it->second.started && (now - it->second.lastPacket) > stopTimeout) {
+				toStop.push_back(it->first);
 			}
-			st.silenceStreak = 0; // reset after stop
+		}
+		for (int sid : toStop) {
+			SpeakInfo &sinfo = speakInfo[sid];
+			if (g_transcript->currentlySpeaking.find(sid) != g_transcript->currentlySpeaking.end()) {
+				std::cout << "[transcript] Player " << sid << " STOP speaking (timeout)" << std::endl;
+				g_transcript->currentlySpeaking.erase(sid);
+			}
+			sinfo.started = false; // reset; retains lastPacket for potential quick restart
 		}
 	}
 
