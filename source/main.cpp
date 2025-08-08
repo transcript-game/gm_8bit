@@ -50,6 +50,13 @@ typedef void (*SV_BroadcastVoiceData)(IClient* cl, int nBytes, char* data, int64
 Detouring::Hook detour_BroadcastVoiceData;
 
 void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
+	// Basic runtime signature / argument sanity check: if nBytes is unrealistically small or data null, log once.
+	static bool warned_invalid_call = false;
+	if ((data == nullptr || nBytes <= 0) && !warned_invalid_call) {
+		std::cout << "[transcript][warn] SV_BroadcastVoiceData unusual call: data=" << (void*)data << " nBytes=" << nBytes << std::endl;
+		warned_invalid_call = true; // avoid spamming
+	}
+
 	//Check if the player is in the set of enabled players.
 	//This is (and needs to be) and O(1) operation for how often this function is called.
 	//If not in the set, just hit the trampoline to ensure default behavior.
@@ -81,6 +88,32 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 
 		//Finally we'll broadcast our new packet
  		net_handl->SendPacket(g_transcript->ip.c_str(), g_transcript->port, decompressedBuffer, nBytes);
+	}
+
+	// Speaking state tracking: mark a user as speaking when we see a non-trivial packet, clear when only header-size or silence for several consecutive packets.
+	// We'll treat packets smaller than STEAM_PCKT_SZ as potential end (could be keepalive). We'll debounce with a small counter.
+	struct SpeakState { int silenceStreak = 0; };
+	static std::unordered_map<int, SpeakState> speakState;
+	const int silenceThreshold = 8; // number of consecutive small packets before declaring stop
+	bool packetHasAudio = (nBytes > (int)STEAM_PCKT_SZ); // heuristic
+
+	if (packetHasAudio) {
+		if (g_transcript->currentlySpeaking.find(uid) == g_transcript->currentlySpeaking.end()) {
+			std::cout << "[transcript] Player " << uid << " START speaking (" << nBytes << " bytes)" << std::endl;
+			g_transcript->currentlySpeaking.insert(uid);
+		}
+		speakState[uid].silenceStreak = 0;
+	} else {
+		// increment streak
+		SpeakState &st = speakState[uid];
+		st.silenceStreak++;
+		if (st.silenceStreak >= silenceThreshold) {
+			if (g_transcript->currentlySpeaking.find(uid) != g_transcript->currentlySpeaking.end()) {
+				std::cout << "[transcript] Player " << uid << " STOP speaking (small packets)" << std::endl;
+				g_transcript->currentlySpeaking.erase(uid);
+			}
+			st.silenceStreak = 0; // reset after stop
+		}
 	}
 
 	if (afflicted_players.find(uid) != afflicted_players.end()) {
