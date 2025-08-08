@@ -1,5 +1,6 @@
 #include "recorder.h"
-#include <opus/opus.h>
+// Use bundled opus headers (located in opus/include). Premake already adds that include dir, so just include <opus.h>.
+#include <opus.h>
 #include <cstdio>
 #include <ctime>
 #include <sstream>
@@ -97,7 +98,7 @@ void RecorderManager::EncodeAndWrite(RecordingSession& session, const int16_t* s
 
 std::string RecorderManager::MakeFilename(int uid) const {
     auto t = std::time(nullptr);
-    std::tm tm; 
+    std::tm tm;
 #if defined(_WIN32)
     localtime_s(&tm, &t);
 #else
