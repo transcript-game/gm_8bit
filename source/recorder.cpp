@@ -36,7 +36,10 @@ void RecorderManager::Start(int uid, int sampleRate) {
         opus_encoder_destroy(enc);
         return;
     }
-
+    // Simple header: magic + version
+    const char magic[8] = {'O','P','U','S','P','K','T','1'};
+    fwrite(magic, 1, sizeof(magic), f);
+    fflush(f);
     sessions[uid] = RecordingSession{enc, f};
 }
 
@@ -46,6 +49,17 @@ void RecorderManager::SubmitPCM(int uid, const int16_t* samples, size_t count, i
     RecordingTask t; t.uid = uid; t.sampleRate = sampleRate; t.pcm.assign(samples, samples + count);
     tasks.push(std::move(t));
     cv.notify_one();
+}
+
+void RecorderManager::SubmitOpusPacket(int uid, const unsigned char* data, size_t len) {
+    std::lock_guard<std::mutex> lock(mtx);
+    auto it = sessions.find(uid);
+    if (it == sessions.end()) return;
+    // Direct write (length prefix + data)
+    uint16_t sz = (uint16_t)len;
+    fwrite(&sz, sizeof(uint16_t), 1, it->second.file);
+    fwrite(data, 1, len, it->second.file);
+    fflush(it->second.file);
 }
 
 void RecorderManager::Stop(int uid) {
@@ -91,6 +105,7 @@ void RecorderManager::EncodeAndWrite(RecordingSession& session, const int16_t* s
             uint16_t sz = (uint16_t)encoded;
             fwrite(&sz, sizeof(uint16_t), 1, session.file); // length prefix
             fwrite(opusBuf.data(), 1, encoded, session.file);
+            fflush(session.file);
         }
         offset += frameSamples;
     }

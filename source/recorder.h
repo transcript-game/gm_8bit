@@ -30,6 +30,8 @@ public:
 
     void Start(int uid, int sampleRate = 24000);
     void SubmitPCM(int uid, const int16_t* samples, size_t count, int sampleRate = 24000);
+    // Submit an already Opus encoded frame (length + data format). Avoids decoding/re-encoding path.
+    void SubmitOpusPacket(int uid, const unsigned char* data, size_t len);
     void Stop(int uid);
 
 private:

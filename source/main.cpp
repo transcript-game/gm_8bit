@@ -96,41 +96,22 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 	// Rationale: once a player stops talking, no further packets arrive, so silence streaks never accumulate.
 	// We'll mark START on first "audio" packet (heuristic: size > header) and mark STOP when no packets seen for timeout.
 	using Clock = std::chrono::steady_clock;
-	struct SpeakInfo { Clock::time_point lastPacket; bool started = false; };
-	static std::unordered_map<int, SpeakInfo> speakInfo;
-	static const std::chrono::milliseconds stopTimeout(1200); // 1.2s of inactivity -> STOP
+	static const std::chrono::milliseconds stopTimeout(1200);
 	bool packetHasAudio = nBytes > (int)STEAM_PCKT_SZ; // crude heuristic
 	Clock::time_point now = Clock::now();
 
-	SpeakInfo &info = speakInfo[uid];
-	info.lastPacket = now; // any packet counts as activity (even small keepalives)
-	if (packetHasAudio && !info.started) {
-		info.started = true;
-		g_transcript->currentlySpeaking.insert(uid);
-		std::cout << "[transcript] Player " << uid << " START speaking (" << nBytes << " bytes)" << std::endl;
-		g_transcript->recorder.Start(uid, 24000);
+	{
+		std::lock_guard<std::mutex> lk(g_transcript->speakMtx);
+		auto &info = g_transcript->speakInfo[uid];
+		info.lastPacket = Clock::now();
+		if (packetHasAudio && !info.started) {
+			info.started = true;
+			g_transcript->currentlySpeaking.insert(uid);
+			std::cout << "[transcript] Player " << uid << " START speaking (" << nBytes << " bytes)" << std::endl;
+			g_transcript->recorder.Start(uid, 24000);
+		}
 	}
 
-	// Periodically scan active speakers to emit STOP when timed out.
-	static Clock::time_point lastSweep = Clock::now();
-	if (now - lastSweep > std::chrono::milliseconds(300)) { // sweep every 300ms
-		lastSweep = now;
-		std::vector<int> toStop;
-		for (auto it = speakInfo.begin(); it != speakInfo.end(); ++it) {
-			if (it->second.started && (now - it->second.lastPacket) > stopTimeout) {
-				toStop.push_back(it->first);
-			}
-		}
-		for (int sid : toStop) {
-			SpeakInfo &sinfo = speakInfo[sid];
-			if (g_transcript->currentlySpeaking.find(sid) != g_transcript->currentlySpeaking.end()) {
-				std::cout << "[transcript] Player " << sid << " STOP speaking (timeout)" << std::endl;
-				g_transcript->currentlySpeaking.erase(sid);
-				g_transcript->recorder.Stop(sid);
-			}
-			sinfo.started = false; // reset; retains lastPacket for potential quick restart
-		}
-	}
 
 	if (afflicted_players.find(uid) != afflicted_players.end()) {
 		IVoiceCodec* codec = std::get<0>(afflicted_players.at(uid));
@@ -172,6 +153,20 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		int bytesWritten = SteamVoice::CompressIntoBuffer(steamid, codec, decompressedBuffer, samples*2, recompressBuffer, sizeof(recompressBuffer), 24000);
 		if (bytesWritten <= 0) {
 			return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
+		}
+
+		// Submit each contained Opus frame chunk as one packet (our custom container: length+data). Here we only have one contiguous opus payload inside recompressBuffer after headers.
+		// recompressBuffer layout: steamid(8) + OP_SAMPLERATE op + rate(2) + OP_CODEC opcode + len(2) + opusdata + crc(4)
+		if (bytesWritten > (int)(sizeof(uint64_t)+1+2+1+2+4)) {
+			char* ptr = recompressBuffer + sizeof(uint64_t); // after steamid
+			// skip samplerate op (1 +2)
+			ptr += 1 + 2; // OP_SAMPLERATE
+			// opcode OP_CODEC
+			ptr += 1; // opcode
+			uint16_t opusLen = *(uint16_t*)ptr; ptr += 2;
+			if (opusLen > 0 && ptr + opusLen + 4 <= recompressBuffer + bytesWritten) { // +4 for crc at end
+				g_transcript->recorder.SubmitOpusPacket(uid, (unsigned char*)ptr, opusLen);
+			}
 		}
 
 		#ifdef _DEBUG
@@ -250,6 +245,36 @@ LUA_FUNCTION_STATIC(transcript_enableEffect) {
 GMOD_MODULE_OPEN()
 {
 	g_transcript = new transcriptState();
+	// Launch monitor thread for speaking timeout detection
+	g_transcript->monitorThread = std::thread([](){
+		using Clock = std::chrono::steady_clock;
+		const auto sweepInterval = std::chrono::milliseconds(300);
+		const auto stopTimeout = std::chrono::milliseconds(1200);
+		while (g_transcript->monitorRunning) {
+			std::this_thread::sleep_for(sweepInterval);
+			Clock::time_point now = Clock::now();
+			std::vector<int> toStop;
+			{
+				std::lock_guard<std::mutex> lk(g_transcript->speakMtx);
+				for (auto &p : g_transcript->speakInfo) {
+					if (p.second.started && (now - p.second.lastPacket) > stopTimeout) {
+						toStop.push_back(p.first);
+					}
+				}
+				for (int sid : toStop) {
+					auto it = g_transcript->speakInfo.find(sid);
+					if (it != g_transcript->speakInfo.end()) {
+						it->second.started = false;
+					}
+					if (g_transcript->currentlySpeaking.find(sid) != g_transcript->currentlySpeaking.end()) {
+						std::cout << "[transcript] Player " << sid << " STOP speaking (timeout)" << std::endl;
+						g_transcript->currentlySpeaking.erase(sid);
+						g_transcript->recorder.Stop(sid);
+					}
+				}
+			}
+		}
+	});
 
 	SourceSDK::ModuleLoader engine_loader("engine");
 	SymbolFinder symfinder;
@@ -331,6 +356,8 @@ GMOD_MODULE_OPEN()
 
 GMOD_MODULE_CLOSE()
 {
+	g_transcript->monitorRunning = false;
+	if (g_transcript->monitorThread.joinable()) g_transcript->monitorThread.join();
 	detour_BroadcastVoiceData.Disable();
 	detour_BroadcastVoiceData.Destroy();
 
