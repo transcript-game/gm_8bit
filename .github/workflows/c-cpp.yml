@@ -17,13 +17,14 @@ jobs:
             - name: Checkout main repo
               uses: actions/checkout@v4
 
-            - name: Checkout garrysmod_common submodule
+            - name: Checkout garrysmod_common (pinned)
               uses: actions/checkout@v4
               with:
                   repository: danielga/garrysmod_common
-                  ref: x86-64-support-sourcesdk
-                  submodules: recursive
+                  ref: 63bd98014b342d4250ce365ad856f9132ee7c11e
                   path: garrysmod_common
+                  fetch-depth: 1
+                  submodules: recursive
 
             - name: Install Premake & dépendances
               run: |
