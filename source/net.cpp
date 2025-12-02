@@ -1,5 +1,6 @@
 #include "net.h"
 #include <cstdint>
+#include "debug.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -36,6 +37,7 @@ void Net::SendPacket(const char* dest, uint16_t port, const char* buffer, uint32
 	dest_str.sin_family = AF_INET;
 	dest_str.sin_port = htons(port);
 	inet_pton(AF_INET, dest, &dest_str.sin_addr);
+	DEBUG_LOG("Sending UDP packet to " << dest << ":" << port << " (" << len << " bytes)");
 	sendto(m_socket, buffer, len, 0, (sockaddr*)&dest_str, sizeof(dest_str));
 }
 

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <iclient.h>
 #include <unordered_map>
+#include "debug.h"
 #include "ivoicecodec.h"
 #include "audio_effects.h"
 #include "net.h"
@@ -54,9 +55,11 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 	//This is (and needs to be) and O(1) operation for how often this function is called.
 	//If not in the set, just hit the trampoline to ensure default behavior.
 	int uid = cl->GetUserID();
+	DEBUG_LOG("Voice packet received for uid " << uid << " (" << nBytes << " bytes)");
 
 #ifdef THIRDPARTY_LINK
 	if(checkIfMuted(cl->GetPlayerSlot()+1)) {
+		DEBUG_LOG("Skipping muted player uid " << uid << " due to third-party mute");
 		return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
 	}
 #endif
@@ -80,6 +83,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		std::memcpy(decompressedBuffer + sizeof(uint64_t), data + sizeof(uint64_t), toCopy);
 
 		//Finally we'll broadcast our new packet
+		DEBUG_LOG("Broadcasting packet for steamid " << id64 << " to " << g_eightbit->ip << ":" << g_eightbit->port << " (" << nBytes << " bytes)");
  		net_handl->SendPacket(g_eightbit->ip.c_str(), g_eightbit->port, decompressedBuffer, nBytes);
 	}
 
@@ -87,6 +91,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		IVoiceCodec* codec = std::get<0>(afflicted_players.at(uid));
 
 		if(nBytes < STEAM_PCKT_SZ) {
+			DEBUG_LOG("Packet too small for processing; forwarding original for uid " << uid);
 			return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
 		}
 
@@ -94,23 +99,25 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		int samples = bytesDecompressed / 2;
 		if (bytesDecompressed <= 0) {
 			//Just hit the trampoline at this point.
+			DEBUG_LOG("Failed to decompress packet for uid " << uid << " (" << nBytes << " bytes)");
 			return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
 		}
 
-		#ifdef _DEBUG
-			std::cout << "Decompressed samples " << samples << std::endl;
-		#endif
+		DEBUG_LOG("Decompressed " << samples << " samples for uid " << uid);
 
 		//Apply audio effect
 		int eff = std::get<1>(afflicted_players.at(uid));
 		switch (eff) {
 		case AudioEffects::EFF_BITCRUSH:
+			DEBUG_LOG("Applying BITCRUSH to uid " << uid << " (quant " << g_eightbit->crushFactor << ", gain " << g_eightbit->gainFactor << ")");
 			AudioEffects::BitCrush((uint16_t*)&decompressedBuffer, samples, g_eightbit->crushFactor, g_eightbit->gainFactor);
 			break;
 		case AudioEffects::EFF_DESAMPLE:
+			DEBUG_LOG("Applying DESAMPLE to uid " << uid << " (rate " << g_eightbit->desampleRate << ")");
 			AudioEffects::Desample((uint16_t*)&decompressedBuffer, samples, g_eightbit->desampleRate);
 			break;
 		default:
+			DEBUG_LOG("No effect applied for uid " << uid);
 			break;
 		}
 
@@ -118,43 +125,48 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		uint64_t steamid = *(uint64_t*)data;
 		int bytesWritten = SteamVoice::CompressIntoBuffer(steamid, codec, decompressedBuffer, samples*2, recompressBuffer, sizeof(recompressBuffer), 24000);
 		if (bytesWritten <= 0) {
+			DEBUG_LOG("Failed to recompress packet for uid " << uid << "; forwarding original");
 			return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
 		}
 
-		#ifdef _DEBUG
-			std::cout << "Retransmitted pckt size: " << bytesWritten << std::endl;
-		#endif
+		DEBUG_LOG("Recompressed packet for uid " << uid << " to " << bytesWritten << " bytes");
 
 		//Broadcast voice data with our updated compressed data.
 		return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, bytesWritten, recompressBuffer, xuid);
 	}
 	else {
+		DEBUG_LOG("No effect enabled; forwarding original packet for uid " << uid);
 		return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
 	}
 }
 
 LUA_FUNCTION_STATIC(eightbit_crush) {
 	g_eightbit->crushFactor = (int)LUA->GetNumber(1);
+	DEBUG_LOG("SetCrushFactor to " << g_eightbit->crushFactor);
 	return 0;
 }
 
 LUA_FUNCTION_STATIC(eightbit_gain) {
 	g_eightbit->gainFactor = (float)LUA->GetNumber(1);
+	DEBUG_LOG("SetGainFactor to " << g_eightbit->gainFactor);
 	return 0;
 }
 
 LUA_FUNCTION_STATIC(eightbit_setbroadcastip) {
 	g_eightbit->ip = std::string(LUA->GetString());
+	DEBUG_LOG("SetBroadcastIP to " << g_eightbit->ip);
 	return 0;
 }
 
 LUA_FUNCTION_STATIC(eightbit_setbroadcastport) {
 	g_eightbit->port = (uint16_t)LUA->GetNumber(1);
+	DEBUG_LOG("SetBroadcastPort to " << g_eightbit->port);
 	return 0;
 }
 
 LUA_FUNCTION_STATIC(eightbit_broadcast) {
 	g_eightbit->broadcastPackets = LUA->GetBool(1);
+	DEBUG_LOG("EnableBroadcast set to " << g_eightbit->broadcastPackets);
 	return 0;
 }
 
@@ -165,6 +177,7 @@ LUA_FUNCTION_STATIC(eightbit_getcrush) {
 
 LUA_FUNCTION_STATIC(eightbit_setdesamplerate) {
 	g_eightbit->desampleRate = (int)LUA->GetNumber(1);
+	DEBUG_LOG("SetDesampleRate to " << g_eightbit->desampleRate);
 	return 0;
 }
 
@@ -178,9 +191,11 @@ LUA_FUNCTION_STATIC(eightbit_enableEffect) {
 			IVoiceCodec* codec = std::get<0>(afflicted_players.at(id));
 			delete codec;
 			afflicted_players.erase(id);
+			DEBUG_LOG("Disabled effect for uid " << id);
 		}
 		else {
 			std::get<1>(afflicted_players.at(id)) = eff;
+			DEBUG_LOG("Updated effect for uid " << id << " to type " << eff);
 		}
 		return 0;
 	}
@@ -189,6 +204,10 @@ LUA_FUNCTION_STATIC(eightbit_enableEffect) {
 		IVoiceCodec* codec = new SteamOpus::Opus_FrameDecoder();
 		codec->Init(5, 24000);
 		afflicted_players.insert(std::pair<int, std::tuple<IVoiceCodec*, int>>(id, std::tuple<IVoiceCodec*, int>(codec, eff)));
+		DEBUG_LOG("Enabled effect for uid " << id << " type " << eff);
+	}
+	else {
+		DEBUG_LOG("No effect change for uid " << id << " (EFF_NONE requested on non-afflicted player)");
 	}
 	return 0;
 }
@@ -197,6 +216,7 @@ LUA_FUNCTION_STATIC(eightbit_enableEffect) {
 GMOD_MODULE_OPEN()
 {
 	g_eightbit = new EightbitState();
+	DEBUG_LOG("gm_8bit initializing; debug logging is enabled");
 
 	SourceSDK::ModuleLoader engine_loader("engine");
 	SymbolFinder symfinder;
@@ -216,6 +236,7 @@ GMOD_MODULE_OPEN()
 
 	detour_BroadcastVoiceData.Create(Detouring::Hook::Target(sv_bcast), reinterpret_cast<void*>(&hook_BroadcastVoiceData));
 	detour_BroadcastVoiceData.Enable();
+	DEBUG_LOG("Attached SV_BroadcastVoiceData hook");
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 
@@ -278,8 +299,10 @@ GMOD_MODULE_OPEN()
 
 GMOD_MODULE_CLOSE()
 {
+	DEBUG_LOG("gm_8bit shutting down; cleaning up " << g_eightbit->afflictedPlayers.size() << " codecs");
 	detour_BroadcastVoiceData.Disable();
 	detour_BroadcastVoiceData.Destroy();
+	DEBUG_LOG("Detached SV_BroadcastVoiceData hook");
 
 	for (auto& p : g_eightbit->afflictedPlayers) {
 		IVoiceCodec* codec = std::get<0>(p.second);
@@ -290,6 +313,7 @@ GMOD_MODULE_CLOSE()
 
 	delete net_handl;
 	delete g_eightbit;
+	DEBUG_LOG("Cleanup complete");
 
 	return 0;
 }

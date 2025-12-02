@@ -674,11 +674,11 @@ if (error_condition) {
 4. **Compression failure**: Pass through original
 5. **Opus errors**: Reset state and continue
 
-**No Logging**:
+**Debug Logging (compile-time toggle)**:
 
--   Silent failures to avoid console spam
--   Could add debug logging for development builds
--   Production: fail silently, maintain uptime
+-   Controlled by `DEBUG_MODE` in `source/debug.h` (default: `false`)
+-   When enabled, logs packet flow, effect application, and state changes
+-   Intentionally verbose; only flip on while debugging issues
 
 ## Performance Optimizations
 
