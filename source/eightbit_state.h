@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <unordered_map>
+#include "ivoicecodec.h"
 
 struct EightbitState {
 	int crushFactor = 350;
