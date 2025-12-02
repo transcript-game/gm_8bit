@@ -2,16 +2,15 @@
 
 ## Introduction
 
-**gm_8bit** is a binary module for Garry's Mod that provides real-time voice manipulation capabilities. It intercepts Steam voice data on Source Engine servers, allowing for audio effects, voice relay, and recording functionality.
+**gm_8bit** is a binary module for Garry's Mod that intercepts Steam voice packets and relays them over UDP. It focuses exclusively on streaming captured voice to external consumers—no in-engine audio effects or Opus processing remain.
 
 ## Purpose
 
 The module enables server administrators to:
 
--   Apply real-time audio effects to player voices (bitcrushing, frequency reduction)
 -   Relay voice packets to external applications via UDP
--   Record and process voice communications
--   Create immersive audio experiences (radio effects, voice distortion, etc.)
+-   Record and process voice communications outside the game server
+-   Feed voice data into analytics, transcription, or streaming pipelines
 
 ## Key Features
 
@@ -19,30 +18,17 @@ The module enables server administrators to:
 
 -   Hooks into Source Engine's `SV_BroadcastVoiceData` function
 -   Intercepts voice packets before broadcast to clients
--   Non-destructive: can pass through unmodified if needed
+-   Non-destructive: always forwards packets to the game unchanged
 
-### 2. Real-Time Processing
-
--   Decompresses Opus-encoded voice data
--   Applies configurable audio effects per-player
--   Recompresses and broadcasts modified audio
-
-### 3. Audio Effects
-
--   **Bitcrusher**: Reduces bit depth for lo-fi/retro sound
--   **Desampler**: Reduces sample rate for frequency distortion
--   Configurable parameters via Lua
-
-### 4. Network Relay
+### 2. Network Relay
 
 -   UDP broadcast of voice packets to external applications
 -   Configurable IP and port
 -   Useful for recording, analysis, or external processing
 
-### 5. Lua Integration
+### 3. Lua Integration
 
 -   Full control via Garry's Mod Lua API
--   Per-player effect management
 -   Runtime configuration changes
 
 ## Technical Stack
@@ -67,101 +53,62 @@ The module enables server administrators to:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Garry's Mod Server                      │
+│                      Garry's Mod Server                     │
 ├─────────────────────────────────────────────────────────────┤
-│                                                               │
+│                                                             │
 │  Client Voice Input → Source Engine → SV_BroadcastVoiceData │
-│                                              ↓                │
-│                                         [HOOK]                │
-│                                              ↓                │
-│                                    ┌─────────────────┐       │
-│                                    │  gm_8bit Module │       │
-│                                    ├─────────────────┤       │
-│                                    │ 1. Decompress   │       │
-│                                    │ 2. Apply Effect │       │
-│                                    │ 3. Recompress   │       │
-│                                    │ 4. Broadcast    │       │
-│                                    └─────────────────┘       │
-│                                         ↓         ↓           │
-│                              Broadcast to    UDP Relay       │
-│                                 Clients      (optional)       │
+│                                              ↓              │
+│                                         [HOOK]              │
+│                                              ↓              │
+│                                    ┌─────────────────┐     │
+│                                    │  gm_8bit Module │     │
+│                                    ├─────────────────┤     │
+│                                    │ 1. Stamp SteamID│     │
+│                                    │ 2. Forward UDP  │     │
+│                                    │ 3. Pass-through │     │
+│                                    └─────────────────┘     │
+│                                         ↓        ↓         │
+│                              Broadcast to   UDP Relay      │
+│                                 Clients     (default on)    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Data Flow
 
-1. **Capture**: Player speaks, client sends Opus-compressed voice packet
+1. **Capture**: Player speaks, client sends Steam voice packet
 2. **Intercept**: Hook captures packet before engine broadcast
-3. **Decode**: Steam Voice format decompressed to Opus frames
-4. **Extract**: Opus frames decoded to raw PCM samples (16-bit signed)
-5. **Transform**: Audio effects applied to PCM data
-6. **Encode**: Modified PCM encoded back to Opus frames
-7. **Package**: Opus frames packaged in Steam Voice format
-8. **Distribute**: Broadcast to all clients + optional UDP relay
+3. **Annotate**: Module stamps packet with authoritative SteamID64
+4. **Relay**: Packet forwarded via UDP to configured IP/port
+5. **Broadcast**: Original packet continues through Source Engine
 
 ## Performance Characteristics
 
-### Latency
+### Latency & Overhead
 
--   **Processing overhead**: ~2-5ms per voice packet
--   **Frame size**: 20ms (480 samples @ 24kHz)
--   **Total latency**: Minimal impact on voice quality
+-   Relaying adds negligible CPU cost; packet contents are untouched
+-   Voice broadcast path remains default Source Engine behavior
 
 ### CPU Usage
 
 -   **Idle**: Negligible when no voice activity
--   **Active**: ~0.5-2% per speaking player (varies by effect)
+-   **Active**: Primarily socket send overhead
 -   **Scalability**: Linear with number of speaking players
 
 ### Memory
 
--   **Static buffers**: ~60KB (decompression, compression, effects)
--   **Per-player state**: ~40KB per afflicted player (Opus encoder/decoder)
--   **Typical usage**: <1MB for 10 players with effects
+-   **Static buffers**: ~20KB for packet staging
+-   **Per-player state**: None (no codec instances kept)
+-   **Typical usage**: Well under 1MB
 
 ## Use Cases
 
-### 1. Radio Effects
-
-```lua
--- Make player sound like they're on a radio
-eightbit.SetCrushFactor(350)
-eightbit.SetGainFactor(1.2)
-eightbit.EnableEffect(ply:UserID(), eightbit.EFF_BITCRUSH)
-```
-
-### 2. Voice Recording
+### 1. Voice Recording
 
 ```lua
 -- Enable UDP relay for external recording
 eightbit.SetBroadcastIP("127.0.0.1")
 eightbit.SetBroadcastPort(4000)
 eightbit.EnableBroadcast(true)
-```
-
-### 3. Damaged Equipment
-
-```lua
--- Simulate damaged communication device
-eightbit.SetDesampleRate(3)
-eightbit.EnableEffect(ply:UserID(), eightbit.EFF_DESAMPLE)
-```
-
-### 4. Proximity Effects
-
-```lua
--- Apply effects based on distance from radio tower
-hook.Add("Think", "VoiceEffects", function()
-    for _, ply in ipairs(player.GetAll()) do
-        local dist = ply:GetPos():Distance(radioTowerPos)
-        if dist > 500 then
-            eightbit.SetCrushFactor(math.floor(dist / 2))
-            eightbit.EnableEffect(ply:UserID(), eightbit.EFF_BITCRUSH)
-        else
-            eightbit.EnableEffect(ply:UserID(), eightbit.EFF_NONE)
-        end
-    end
-end)
 ```
 
 ## Limitations
@@ -178,13 +125,7 @@ end)
 -   Mono only (single channel)
 -   20ms frame size (480 samples)
 
-### 3. Effect Stacking
-
--   Only one effect per player at a time
--   Cannot chain effects (bitcrush + desample)
--   Would require effect pipeline redesign
-
-### 4. Network Protocol
+### 3. Network Protocol
 
 -   Relies on Source Engine voice protocol
 -   No encryption/authentication for UDP relay
@@ -194,9 +135,8 @@ end)
 
 ### 1. Buffer Overflow Protection
 
--   All buffer operations checked with bounds macros
 -   Fixed-size buffers prevent heap exhaustion
--   Safe fallback on malformed packets
+-   Copies are bounded by incoming packet size
 
 ### 2. UDP Relay
 

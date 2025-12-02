@@ -4,6 +4,8 @@
 
 gm_8bit uses **Premake5** as its build system generator. Premake generates platform-specific project files (Visual Studio solutions on Windows, Makefiles on Linux) from a single Lua configuration script.
 
+Note: The current streaming-only build no longer links against Opus. Any Opus setup steps in this document are legacy and can be skipped unless you plan to reintroduce effect processing.
+
 ## Prerequisites
 
 ### All Platforms

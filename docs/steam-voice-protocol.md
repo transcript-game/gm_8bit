@@ -2,7 +2,7 @@
 
 ## Overview
 
-Steam uses a proprietary voice packet format to transmit Opus-encoded audio over the Source Engine network protocol. This format wraps Opus frames with metadata including player identification, checksums, and operation codes.
+Steam uses a proprietary voice packet format to transmit Opus-encoded audio over the Source Engine network protocol. This format wraps Opus frames with metadata including player identification, checksums, and operation codes. gm_8bit now forwards these packets without decoding them; the details below are provided for downstream consumers that want to parse the relayed data.
 
 ## Packet Structure
 

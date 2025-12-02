@@ -2,7 +2,7 @@
 
 ## Overview
 
-gm_8bit maintains global state for effect parameters, network configuration, and per-player codec instances. Proper state management is critical for thread safety, memory efficiency, and correct behavior.
+gm_8bit now maintains only network relay configuration and broadcast toggles. The effect and codec state described below is legacy and retained for historical context.
 
 ## Global State Structure
 

@@ -2,7 +2,7 @@
 
 ## System Architecture
 
-gm_8bit uses a hook-based architecture to intercept voice data at the broadcast stage, manipulate it, and re-inject it into the engine's normal flow.
+gm_8bit uses a hook-based architecture to intercept voice data at the broadcast stage and mirror it over UDP while leaving the engine's normal flow untouched. The effect-processing notes below are legacy and kept for historical reference only.
 
 ## Component Diagram
 

@@ -18,14 +18,5 @@ CreateWorkspace({name = "eightbit"})
 		IncludeLuaShared()
 		IncludeHelpersExtended()
 
-		links("opus")
-		includedirs("opus/include")
-
-		filter({"platforms:x86_64"})
-			libdirs {"opus/lib64"}
-
-		filter({"platforms:x86"})
-			libdirs {"opus/lib32"}
-
 		filter("system:windows")
 			links("ws2_32")

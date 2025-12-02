@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide provides detailed instructions for recreating gm_8bit in Rust, covering architecture decisions, library choices, implementation patterns, and potential improvements.
+This guide provides detailed instructions for recreating gm_8bit in Rust, covering architecture decisions, library choices, implementation patterns, and potential improvements. Current C++ builds are streaming-only; any effect-processing sections here are legacy ideas that would need to be reintroduced intentionally.
 
 ## Why Rust?
 

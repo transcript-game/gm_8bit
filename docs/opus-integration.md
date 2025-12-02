@@ -2,7 +2,7 @@
 
 ## Overview
 
-gm_8bit uses the Opus audio codec (version 1.3+) to compress and decompress voice data. Opus is a lossy codec designed for real-time voice transmission with low latency and high quality.
+Current gm_8bit builds no longer link against or invoke Opus—the module simply relays the Steam voice packets it intercepts. This document remains as protocol background in case you need to process the forwarded packets with your own Opus pipeline downstream.
 
 ## Opus Codec Basics
 
