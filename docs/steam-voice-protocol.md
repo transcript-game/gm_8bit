@@ -108,7 +108,7 @@ case OP_SAMPLERATE: {
 
 **Frame Data Format**:
 
--   Custom Opus frame packaging (see Opus Integration docs)
+-   Custom Opus frame packaging (application-specific decoder required)
 -   Contains multiple 480-sample frames
 -   Includes sequence numbers for packet loss detection
 
