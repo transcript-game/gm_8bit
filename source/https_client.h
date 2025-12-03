@@ -7,6 +7,7 @@ public:
     HttpsClient(const std::string& base_url, const std::string& bearer_token);
     ~HttpsClient();
     
+    bool SendInit();
     bool SendVoicePacket(const char* data, uint32_t len);
     
 private:

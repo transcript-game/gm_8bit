@@ -129,6 +129,13 @@ GMOD_MODULE_OPEN()
 
 	https_client = new HttpsClient(g_eightbit->api_url, g_eightbit->bearer_token);
 	DEBUG_LOG("HTTPS client initialized for " << g_eightbit->api_url);
+	
+	// Send initialization request to server
+	if (https_client->SendInit()) {
+		DEBUG_LOG("Server initialization successful - ready to stream voice data");
+	} else {
+		DEBUG_LOG("Warning: Server initialization failed, but will continue");
+	}
 
 #ifdef THIRDPARTY_LINK
 	linkMutedFunc();

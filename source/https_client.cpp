@@ -43,6 +43,114 @@ HttpsClient::HttpsClient(const std::string& base_url, const std::string& bearer_
 #endif
 }
 
+bool HttpsClient::SendInit() {
+#ifdef _WIN32
+    if (!m_connect) return false;
+    
+    HINTERNET request = WinHttpOpenRequest(
+        (HINTERNET)m_connect,
+        L"POST",
+        L"/api/init",
+        NULL,
+        WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES,
+        WINHTTP_FLAG_SECURE
+    );
+    
+    if (!request) {
+        DEBUG_LOG("Failed to create init HTTP request");
+        return false;
+    }
+    
+    // Add Authorization header
+    std::wstring bearer_token_wide(m_bearer_token.begin(), m_bearer_token.end());
+    std::wstring auth_header = L"Authorization: Bearer " + bearer_token_wide;
+    WinHttpAddRequestHeaders(
+        request,
+        auth_header.c_str(),
+        (DWORD)-1L,
+        WINHTTP_ADDREQ_FLAG_ADD
+    );
+    
+    // Add headers
+    WinHttpAddRequestHeaders(
+        request,
+        L"Content-Type: application/json",
+        (DWORD)-1L,
+        WINHTTP_ADDREQ_FLAG_ADD
+    );
+    
+    WinHttpAddRequestHeaders(
+        request,
+        L"X-Client-Id: gm_8bit",
+        (DWORD)-1L,
+        WINHTTP_ADDREQ_FLAG_ADD
+    );
+    
+    // Empty JSON body
+    const char* body = "{}";
+    DWORD bodyLen = 2;
+    
+    // Send request
+    BOOL result = WinHttpSendRequest(
+        request,
+        WINHTTP_NO_ADDITIONAL_HEADERS,
+        0,
+        (LPVOID)body,
+        bodyLen,
+        bodyLen,
+        0
+    );
+    
+    if (result) {
+        result = WinHttpReceiveResponse(request, NULL);
+    }
+    
+    if (!result) {
+        DEBUG_LOG("Init request failed: " << GetLastError());
+    } else {
+        DEBUG_LOG("Init request sent successfully");
+    }
+    
+    WinHttpCloseHandle(request);
+    return result != 0;
+    
+#else
+    if (!m_curl) return false;
+    
+    std::string url = m_base_url + "/api/init";
+    curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(m_curl, CURLOPT_POST, 1L);
+    
+    // Set Bearer token and headers
+    struct curl_slist* headers = NULL;
+    std::string auth = "Authorization: Bearer " + m_bearer_token;
+    headers = curl_slist_append(headers, auth.c_str());
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, "X-Client-Id: gm_8bit");
+    curl_easy_setopt(m_curl, CURLOPT_HTTPHEADER, headers);
+    
+    // Empty JSON body
+    const char* body = "{}";
+    curl_easy_setopt(m_curl, CURLOPT_POSTFIELDS, body);
+    curl_easy_setopt(m_curl, CURLOPT_POSTFIELDSIZE, 2L);
+    
+    // Set timeout
+    curl_easy_setopt(m_curl, CURLOPT_TIMEOUT, 5L);
+    
+    CURLcode res = curl_easy_perform(m_curl);
+    curl_slist_free_all(headers);
+    
+    if (res != CURLE_OK) {
+        DEBUG_LOG("Init request failed: " << curl_easy_strerror(res));
+        return false;
+    }
+    
+    DEBUG_LOG("Init request sent successfully");
+    return true;
+#endif
+}
+
 bool HttpsClient::SendVoicePacket(const char* data, uint32_t len) {
 #ifdef _WIN32
     if (!m_connect) return false;
