@@ -102,14 +102,14 @@ GMOD_MODULE_OPEN()
 	detour_BroadcastVoiceData.Enable();
 	DEBUG_LOG("Attached SV_BroadcastVoiceData hook");
 
-	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-
-	detour_BroadcastVoiceData.Create(Detouring::Hook::Target(sv_bcast), reinterpret_cast<void*>(&hook_BroadcastVoiceData));
-	detour_BroadcastVoiceData.Enable();
-	DEBUG_LOG("Attached SV_BroadcastVoiceData hook");
-
 	https_client = new HttpsClient(g_eightbit->api_url, g_eightbit->bearer_token);
-	DEBUG_LOG("HTTPS client initialized for " << g_eightbit->api_url);ue");
+	DEBUG_LOG("HTTPS client initialized for " << g_eightbit->api_url);
+
+	// Send initialization request to server
+	if (https_client->SendInit()) {
+		DEBUG_LOG("Server initialization successful - ready to stream voice data");
+	} else {
+		DEBUG_LOG("Warning: Server initialization failed, but will continue");
 	}
 
 	return 0;
