@@ -421,7 +421,94 @@ bool HttpsClient::SendFrame(const char* data, uint32_t len) {
     }
 
     m_stream_connected = false;
-    DEBUG_LOG("Streaming chunk failed after retry");
-    return false;
+    DEBUG_LOG("Streaming chunk failed after retry, attempting fallback /api/voice");
+    return SendFallback(data, len);
+#endif
+}
+
+bool HttpsClient::SendFallback(const char* data, uint32_t len) {
+#ifdef _WIN32
+    if (!m_connect) return false;
+
+    HINTERNET request = WinHttpOpenRequest(
+        (HINTERNET)m_connect,
+        L"POST",
+        L"/api/voice",
+        NULL,
+        WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES,
+        WINHTTP_FLAG_SECURE
+    );
+
+    if (!request) {
+        DEBUG_LOG("Fallback: failed to create HTTP request");
+        return false;
+    }
+
+    std::wstring bearer_token_wide(m_bearer_token.begin(), m_bearer_token.end());
+    std::wstring auth_header = L"Authorization: Bearer " + bearer_token_wide;
+    WinHttpAddRequestHeaders(
+        request,
+        auth_header.c_str(),
+        (DWORD)-1L,
+        WINHTTP_ADDREQ_FLAG_ADD
+    );
+
+    WinHttpAddRequestHeaders(
+        request,
+        L"Content-Type: application/octet-stream",
+        (DWORD)-1L,
+        WINHTTP_ADDREQ_FLAG_ADD
+    );
+
+    BOOL result = WinHttpSendRequest(
+        request,
+        WINHTTP_NO_ADDITIONAL_HEADERS,
+        0,
+        (LPVOID)data,
+        len,
+        len,
+        0
+    );
+
+    if (result) {
+        result = WinHttpReceiveResponse(request, NULL);
+    }
+
+    if (!result) {
+        DEBUG_LOG("Fallback POST failed: " << GetLastError());
+    }
+
+    WinHttpCloseHandle(request);
+    return result != 0;
+#else
+    CURL* curl = curl_easy_init();
+    if (!curl) return false;
+
+    std::string url = m_base_url + "/api/voice";
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)len);
+
+    struct curl_slist* headers = NULL;
+    std::string auth = "Authorization: Bearer " + m_bearer_token;
+    headers = curl_slist_append(headers, auth.c_str());
+    headers = curl_slist_append(headers, "Content-Type: application/octet-stream");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+
+    CURLcode res = curl_easy_perform(curl);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) {
+        DEBUG_LOG("Fallback POST failed: " << curl_easy_strerror(res));
+        return false;
+    }
+    return true;
 #endif
 }

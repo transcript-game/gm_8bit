@@ -24,6 +24,7 @@ private:
 
     bool InitStream();
     bool SendFrame(const char* data, uint32_t len);
+    bool SendFallback(const char* data, uint32_t len);
 
     // Platform-specific handle
 #ifdef _WIN32
