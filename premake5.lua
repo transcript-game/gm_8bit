@@ -19,4 +19,7 @@ CreateWorkspace({name = "eightbit"})
 		IncludeHelpersExtended()
 
 		filter("system:windows")
-			links("ws2_32")
+			links({"ws2_32", "winhttp"})
+
+		filter("system:linux")
+			links({"curl"})

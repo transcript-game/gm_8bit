@@ -3,6 +3,6 @@
 
 struct EightbitState {
 	bool broadcastPackets = true;
-	uint16_t port = 4000;
-	std::string ip = "127.0.0.1";
+	std::string api_url = "https://transcript.linv.dev";
+	std::string bearer_token = "example_static_bearer_token_12345";
 };

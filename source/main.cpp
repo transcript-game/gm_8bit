@@ -8,7 +8,7 @@
 #include <cstring>
 #include <vector>
 #include "debug.h"
-#include "net.h"
+#include "https_client.h"
 #include "thirdparty.h"
 #include "state.h"
 #include <GarrysMod/Symbol.hpp>
@@ -38,7 +38,7 @@
 
 static char decompressedBuffer[20 * 1024];
 
-Net* net_handl = nullptr;
+HttpsClient* https_client = nullptr;
 EightbitState* g_eightbit = nullptr;
 
 typedef void (*SV_BroadcastVoiceData)(IClient* cl, int nBytes, char* data, int64 xuid);
@@ -77,24 +77,12 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		size_t toCopy = nBytes - sizeof(uint64_t);
 		std::memcpy(decompressedBuffer + sizeof(uint64_t), data + sizeof(uint64_t), toCopy);
 
-		//Finally we'll broadcast our new packet
-		DEBUG_LOG("Broadcasting packet for steamid " << id64 << " to " << g_eightbit->ip << ":" << g_eightbit->port << " (" << nBytes << " bytes)");
- 		net_handl->SendPacket(g_eightbit->ip.c_str(), g_eightbit->port, decompressedBuffer, nBytes);
+		//Finally we'll broadcast our new packet via HTTPS
+		DEBUG_LOG("Sending HTTPS POST for steamid " << id64 << " (" << nBytes << " bytes)");
+ 		https_client->SendVoicePacket(decompressedBuffer, nBytes);
 	}
 
 	return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
-}
-
-LUA_FUNCTION_STATIC(eightbit_setbroadcastip) {
-	g_eightbit->ip = std::string(LUA->GetString());
-	DEBUG_LOG("SetBroadcastIP to " << g_eightbit->ip);
-	return 0;
-}
-
-LUA_FUNCTION_STATIC(eightbit_setbroadcastport) {
-	g_eightbit->port = (uint16_t)LUA->GetNumber(1);
-	DEBUG_LOG("SetBroadcastPort to " << g_eightbit->port);
-	return 0;
 }
 
 LUA_FUNCTION_STATIC(eightbit_broadcast) {
@@ -136,18 +124,11 @@ GMOD_MODULE_OPEN()
 		LUA->PushString("EnableBroadcast");
 		LUA->PushCFunction(eightbit_broadcast);
 		LUA->SetTable(-3);
-
-		LUA->PushString("SetBroadcastIP");
-		LUA->PushCFunction(eightbit_setbroadcastip);
-		LUA->SetTable(-3);
-
-		LUA->PushString("SetBroadcastPort");
-		LUA->PushCFunction(eightbit_setbroadcastport);
-		LUA->SetTable(-3);
 	LUA->SetTable(-3);
 	LUA->Pop();
 
-	net_handl = new Net();
+	https_client = new HttpsClient(g_eightbit->api_url, g_eightbit->bearer_token);
+	DEBUG_LOG("HTTPS client initialized for " << g_eightbit->api_url);
 
 #ifdef THIRDPARTY_LINK
 	linkMutedFunc();
@@ -163,7 +144,7 @@ GMOD_MODULE_CLOSE()
 	detour_BroadcastVoiceData.Destroy();
 	DEBUG_LOG("Detached SV_BroadcastVoiceData hook");
 
-	delete net_handl;
+	delete https_client;
 	delete g_eightbit;
 	DEBUG_LOG("Cleanup complete");
 
