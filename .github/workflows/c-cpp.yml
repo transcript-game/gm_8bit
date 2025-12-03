@@ -34,7 +34,8 @@ jobs:
           sudo mv premake5 /usr/local/bin/
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y g++-multilib libcurl4-openssl-dev libcurl4-openssl-dev:i386 pkg-config
+          sudo apt-get install -y g++-multilib pkg-config
+          sudo apt-get install -y libcurl4-openssl-dev:i386
           gcc --version
 
       - name: Génération du projet avec Premake
