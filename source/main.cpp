@@ -70,7 +70,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 		std::memcpy(decompressedBuffer + sizeof(uint64_t), data + sizeof(uint64_t), toCopy);
 
 		//Finally we'll broadcast our new packet via HTTPS
-		DEBUG_LOG("Sending HTTPS POST for steamid " << id64 << " (" << nBytes << " bytes)");
+		DEBUG_LOG("Buffering voice packet for steamid " << id64 << " (" << nBytes << " bytes)");
  		https_client->SendVoicePacket(decompressedBuffer, nBytes);
 	}
 
