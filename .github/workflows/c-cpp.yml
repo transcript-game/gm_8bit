@@ -35,14 +35,16 @@ jobs:
           sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get install -y g++-multilib pkg-config
-          # Install 32-bit libcurl first
+          # Install 32-bit libcurl dev package
           sudo apt-get install -y libcurl4-openssl-dev:i386
-          # Install 64-bit libcurl (may conflict with curl-config, but we only need the libs)
-          sudo apt-get install -y libcurl4:amd64 libssl-dev:amd64 || true
+          # Install 64-bit dev package (this might have curl already installed, causing conflict)
+          # We'll force overwrite the conflicting curl-config file
+          sudo apt-get -o Dpkg::Options::="--force-overwrite" install -y libcurl4-openssl-dev || true
           gcc --version
-          # Verify curl libraries are installed
-          ls -la /usr/lib/i386-linux-gnu/libcurl.so* || echo "32-bit libcurl not found"
-          ls -la /usr/lib/x86_64-linux-gnu/libcurl.so* || echo "64-bit libcurl not found"
+          # Verify libraries and pkg-config
+          pkg-config --modversion libcurl || echo "pkg-config for libcurl not found"
+          ls -la /usr/lib/i386-linux-gnu/libcurl.so* 2>/dev/null || echo "32-bit libcurl not found"
+          ls -la /usr/lib/x86_64-linux-gnu/libcurl.so* 2>/dev/null || echo "64-bit libcurl not found"
 
       - name: Génération du projet avec Premake
         run: |
