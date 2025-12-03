@@ -10,7 +10,7 @@
 #include "debug.h"
 #include "net.h"
 #include "thirdparty.h"
-#include "eightbit_state.h"
+#include "state.h"
 #include <GarrysMod/Symbol.hpp>
 #include <cstdint>
 
