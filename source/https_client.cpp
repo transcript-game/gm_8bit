@@ -1,5 +1,6 @@
 #include "https_client.h"
 #include "debug.h"
+#include <cstring>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -50,7 +51,7 @@ HttpsClient::HttpsClient(const std::string& base_url, const std::string& bearer_
 bool HttpsClient::SendInit() {
 #ifdef _WIN32
     if (!m_connect) return false;
-    
+
     HINTERNET request = WinHttpOpenRequest(
         (HINTERNET)m_connect,
         L"POST",
@@ -60,12 +61,12 @@ bool HttpsClient::SendInit() {
         WINHTTP_DEFAULT_ACCEPT_TYPES,
         WINHTTP_FLAG_SECURE
     );
-    
+
     if (!request) {
-        DEBUG_LOG("Failed to create init HTTP request");
+        DEBUG_LOG("Failed to create HTTP request");
         return false;
     }
-    
+
     // Add Authorization header
     std::wstring bearer_token_wide(m_bearer_token.begin(), m_bearer_token.end());
     std::wstring auth_header = L"Authorization: Bearer " + bearer_token_wide;
@@ -75,26 +76,26 @@ bool HttpsClient::SendInit() {
         (DWORD)-1L,
         WINHTTP_ADDREQ_FLAG_ADD
     );
-    
-    // Add headers
+
+    // Add additional headers
     WinHttpAddRequestHeaders(
         request,
         L"Content-Type: application/json",
         (DWORD)-1L,
         WINHTTP_ADDREQ_FLAG_ADD
     );
-    
+
     WinHttpAddRequestHeaders(
         request,
         L"X-Client-Id: gm_8bit",
         (DWORD)-1L,
         WINHTTP_ADDREQ_FLAG_ADD
     );
-    
+
     // Empty JSON body
     const char* body = "{}";
     DWORD bodyLen = 2;
-    
+
     // Send request
     BOOL result = WinHttpSendRequest(
         request,
@@ -105,27 +106,27 @@ bool HttpsClient::SendInit() {
         bodyLen,
         0
     );
-    
+
     if (result) {
         result = WinHttpReceiveResponse(request, NULL);
     }
-    
+
     if (!result) {
         DEBUG_LOG("Init request failed: " << GetLastError());
     } else {
         DEBUG_LOG("Init request sent successfully");
     }
-    
+
     WinHttpCloseHandle(request);
     return result != 0;
-    
+
 #else
     if (!m_curl) return false;
-    
+
     std::string url = m_base_url + "/api/init";
     curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(m_curl, CURLOPT_POST, 1L);
-    
+
     // Set Bearer token and headers
     struct curl_slist* headers = NULL;
     std::string auth = "Authorization: Bearer " + m_bearer_token;
@@ -133,23 +134,23 @@ bool HttpsClient::SendInit() {
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, "X-Client-Id: gm_8bit");
     curl_easy_setopt(m_curl, CURLOPT_HTTPHEADER, headers);
-    
+
     // Empty JSON body
     const char* body = "{}";
     curl_easy_setopt(m_curl, CURLOPT_POSTFIELDS, body);
     curl_easy_setopt(m_curl, CURLOPT_POSTFIELDSIZE, 2L);
-    
+
     // Set timeout
     curl_easy_setopt(m_curl, CURLOPT_TIMEOUT, 5L);
-    
+
     CURLcode res = curl_easy_perform(m_curl);
     curl_slist_free_all(headers);
-    
+
     if (res != CURLE_OK) {
         DEBUG_LOG("Init request failed: " << curl_easy_strerror(res));
         return false;
     }
-    
+
     DEBUG_LOG("Init request sent successfully");
     return true;
 #endif
@@ -160,17 +161,17 @@ bool HttpsClient::SendVoicePacket(const char* data, uint32_t len) {
     size_t old_size = m_packet_buffer.size();
     m_packet_buffer.resize(old_size + len);
     std::memcpy(m_packet_buffer.data() + old_size, data, len);
-    
+
     // Check if we should flush
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_flush).count();
-    
+
     bool should_flush = (m_packet_buffer.size() >= MAX_BUFFER_SIZE) || (elapsed >= FLUSH_INTERVAL_MS);
-    
+
     if (should_flush) {
         return SendBufferedPackets();
     }
-    
+
     return true; // Buffered successfully
 }
 
@@ -182,11 +183,9 @@ void HttpsClient::FlushBuffer() {
 
 bool HttpsClient::SendBufferedPackets() {
     if (m_packet_buffer.empty()) return true;
-    
+
     DEBUG_LOG("Flushing buffer: " << m_packet_buffer.size() << " bytes");
-    
-#ifdef _WIN32
-    
+
 #ifdef _WIN32
     if (!m_connect) {
         m_packet_buffer.clear();
@@ -247,11 +246,11 @@ bool HttpsClient::SendBufferedPackets() {
     }
 
     WinHttpCloseHandle(request);
-    
+
     // Clear buffer and update timer
     m_packet_buffer.clear();
     m_last_flush = std::chrono::steady_clock::now();
-    
+
     return result != 0;
 
 #else
@@ -299,7 +298,7 @@ bool HttpsClient::SendBufferedPackets() {
 HttpsClient::~HttpsClient() {
     // Flush any remaining buffered packets
     FlushBuffer();
-    
+
 #ifdef _WIN32
     if (m_connect) WinHttpCloseHandle((HINTERNET)m_connect);
     if (m_session) WinHttpCloseHandle((HINTERNET)m_session);
