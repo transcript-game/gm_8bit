@@ -8,7 +8,7 @@ static constexpr bool DEBUG_MODE = true;
 #define DEBUG_LOG(msg)                     \
 	do {                                   \
 		if (DEBUG_MODE) {                  \
-			std::cout << "[gm_8bit] " << msg; \
+			std::cout << "[gm_transcript] " << msg; \
 			std::cout << std::endl;       \
 		}                                  \
 	} while (0)

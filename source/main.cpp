@@ -80,7 +80,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 GMOD_MODULE_OPEN()
 {
 	g_eightbit = new EightbitState();
-	DEBUG_LOG("gm_8bit initializing; debug logging is enabled");
+	DEBUG_LOG("gm_transcript initializing; debug logging is enabled");
 
 	SourceSDK::ModuleLoader engine_loader("engine");
 	SymbolFinder symfinder;
@@ -117,7 +117,7 @@ GMOD_MODULE_OPEN()
 
 GMOD_MODULE_CLOSE()
 {
-	DEBUG_LOG("gm_8bit shutting down");
+	DEBUG_LOG("gm_transcript shutting down");
 	detour_BroadcastVoiceData.Disable();
 	detour_BroadcastVoiceData.Destroy();
 	DEBUG_LOG("Detached SV_BroadcastVoiceData hook");
