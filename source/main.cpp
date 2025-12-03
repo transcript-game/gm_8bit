@@ -47,7 +47,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 	int uid = cl->GetUserID();
 	DEBUG_LOG("Voice packet received for uid " << uid << " (" << nBytes << " bytes)");
 
-	if (g_eightbit->broadcastPackets && nBytes > sizeof(uint64_t)) {
+	if (nBytes > sizeof(uint64_t)) {
 		if (nBytes > sizeof(decompressedBuffer)) {
 			DEBUG_LOG("Packet too large to mirror (" << nBytes << " bytes); skipping relay");
 			return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
@@ -77,12 +77,6 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 	return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
 }
 
-LUA_FUNCTION_STATIC(eightbit_broadcast) {
-	g_eightbit->broadcastPackets = LUA->GetBool(1);
-	DEBUG_LOG("EnableBroadcast set to " << g_eightbit->broadcastPackets);
-	return 0;
-}
-
 GMOD_MODULE_OPEN()
 {
 	g_eightbit = new EightbitState();
@@ -110,23 +104,12 @@ GMOD_MODULE_OPEN()
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 
-	LUA->PushString("eightbit");
-	LUA->CreateTable();
-
-		LUA->PushString("EnableBroadcast");
-		LUA->PushCFunction(eightbit_broadcast);
-		LUA->SetTable(-3);
-	LUA->SetTable(-3);
-	LUA->Pop();
+	detour_BroadcastVoiceData.Create(Detouring::Hook::Target(sv_bcast), reinterpret_cast<void*>(&hook_BroadcastVoiceData));
+	detour_BroadcastVoiceData.Enable();
+	DEBUG_LOG("Attached SV_BroadcastVoiceData hook");
 
 	https_client = new HttpsClient(g_eightbit->api_url, g_eightbit->bearer_token);
-	DEBUG_LOG("HTTPS client initialized for " << g_eightbit->api_url);
-
-	// Send initialization request to server
-	if (https_client->SendInit()) {
-		DEBUG_LOG("Server initialization successful - ready to stream voice data");
-	} else {
-		DEBUG_LOG("Warning: Server initialization failed, but will continue");
+	DEBUG_LOG("HTTPS client initialized for " << g_eightbit->api_url);ue");
 	}
 
 	return 0;
