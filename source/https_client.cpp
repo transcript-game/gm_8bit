@@ -357,20 +357,28 @@ bool HttpsClient::SendFrame(const char* data, uint32_t len) {
     std::memcpy(frame.data() + header_size, data, len);
 
 #ifdef _WIN32
-    DWORD written = 0;
-    BOOL ok = WinHttpWriteData(
-        (HINTERNET)m_stream_request,
-        frame.data(),
-        frame.size(),
-        &written
-    );
+    auto write_once = [&](HINTERNET req) -> bool {
+        DWORD written = 0;
+        BOOL ok = WinHttpWriteData(
+            req,
+            frame.data(),
+            (DWORD)frame.size(),
+            &written
+        );
+        return ok && written == frame.size();
+    };
 
-    if (!ok || written != frame.size()) {
-        DEBUG_LOG("Failed to write streaming frame, resetting stream");
-        InitStream();
-        return false;
+    if (write_once((HINTERNET)m_stream_request)) {
+        return true;
     }
-    return true;
+
+    DEBUG_LOG("Failed to write streaming frame, attempting to re-init stream");
+    if (InitStream() && write_once((HINTERNET)m_stream_request)) {
+        return true;
+    }
+
+    DEBUG_LOG("Streaming frame failed after retry");
+    return false;
 #else
     if (!m_curl || !m_stream_connected) {
         return false;
@@ -388,16 +396,32 @@ bool HttpsClient::SendFrame(const char* data, uint32_t len) {
     size_t chunk_len = chunk.size();
     size_t sent_total = 0;
 
-    while (sent_total < chunk_len) {
-        size_t nsent = 0;
-        CURLcode res = curl_easy_send(m_curl, chunk_data + sent_total, chunk_len - sent_total, &nsent);
-        if (res != CURLE_OK) {
-            DEBUG_LOG("Failed to send streaming chunk: " << curl_easy_strerror(res));
-            m_stream_connected = false;
-            return false;
+    auto send_chunk = [&](void) -> bool {
+        size_t sent_total_inner = 0;
+        while (sent_total_inner < chunk_len) {
+            size_t nsent = 0;
+            CURLcode res = curl_easy_send(m_curl, chunk_data + sent_total_inner, chunk_len - sent_total_inner, &nsent);
+            if (res != CURLE_OK) {
+                DEBUG_LOG("Failed to send streaming chunk: " << curl_easy_strerror(res));
+                return false;
+            }
+            sent_total_inner += nsent;
         }
-        sent_total += nsent;
+        return true;
+    };
+
+    if (send_chunk()) {
+        return true;
     }
-    return true;
+
+    // Retry once after re-init
+    m_stream_connected = false;
+    if (InitStream() && send_chunk()) {
+        return true;
+    }
+
+    m_stream_connected = false;
+    DEBUG_LOG("Streaming chunk failed after retry");
+    return false;
 #endif
 }
