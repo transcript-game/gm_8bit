@@ -23,3 +23,5 @@ CreateWorkspace({name = "eightbit"})
 
 		filter("system:linux")
 			links({"curl"})
+			buildoptions({"`pkg-config --cflags libcurl`"})
+			linkoptions({"`pkg-config --libs libcurl`"})
