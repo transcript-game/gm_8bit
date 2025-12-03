@@ -9,7 +9,6 @@
 #include <vector>
 #include "debug.h"
 #include "https_client.h"
-#include "thirdparty.h"
 #include "state.h"
 #include <GarrysMod/Symbol.hpp>
 #include <cstdint>
@@ -47,13 +46,6 @@ Detouring::Hook detour_BroadcastVoiceData;
 void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 	int uid = cl->GetUserID();
 	DEBUG_LOG("Voice packet received for uid " << uid << " (" << nBytes << " bytes)");
-
-#ifdef THIRDPARTY_LINK
-	if(checkIfMuted(cl->GetPlayerSlot()+1)) {
-		DEBUG_LOG("Skipping muted player uid " << uid << " due to third-party mute");
-		return detour_BroadcastVoiceData.GetTrampoline<SV_BroadcastVoiceData>()(cl, nBytes, data, xuid);
-	}
-#endif
 
 	if (g_eightbit->broadcastPackets && nBytes > sizeof(uint64_t)) {
 		if (nBytes > sizeof(decompressedBuffer)) {
@@ -129,17 +121,13 @@ GMOD_MODULE_OPEN()
 
 	https_client = new HttpsClient(g_eightbit->api_url, g_eightbit->bearer_token);
 	DEBUG_LOG("HTTPS client initialized for " << g_eightbit->api_url);
-	
+
 	// Send initialization request to server
 	if (https_client->SendInit()) {
 		DEBUG_LOG("Server initialization successful - ready to stream voice data");
 	} else {
 		DEBUG_LOG("Warning: Server initialization failed, but will continue");
 	}
-
-#ifdef THIRDPARTY_LINK
-	linkMutedFunc();
-#endif
 
 	return 0;
 }
