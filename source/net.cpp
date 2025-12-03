@@ -16,9 +16,6 @@
 #endif
 
 Net::Net() {
-	// Log the encryption key for testing DLL hex editing
-	DEBUG_LOG("Voice encryption key: " << ENCRYPTION_KEY);
-	
 #ifdef _WIN32
 	WSADATA wsaData;
 	int res = WSAStartup(MAKEWORD(2, 2), &wsaData);
