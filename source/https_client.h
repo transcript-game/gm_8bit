@@ -20,8 +20,9 @@ private:
     // Buffering for batch requests - optimized for transcription (not real-time)
     std::vector<char> m_packet_buffer;
     std::chrono::steady_clock::time_point m_last_flush;
-    static constexpr size_t MAX_BUFFER_SIZE = 1 * 1024 * 1024; // 1MB (reduced for more frequent flushes)
-    static constexpr int FLUSH_INTERVAL_MS = 1000; // 1 second (increased from 100ms)
+    // Keep batches large enough to carry ~1s of audio for up to ~128 players while staying under server limit (10MB).
+    static constexpr size_t MAX_BUFFER_SIZE = 8 * 1024 * 1024; // 8MB
+    static constexpr int FLUSH_INTERVAL_MS = 1000; // target ~1 request/sec per game server
 
     bool SendBufferedPackets();
 
