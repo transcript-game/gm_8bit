@@ -31,6 +31,7 @@ HttpsClient::HttpsClient(const std::string& base_url, const std::string& bearer_
     // Initialize buffer and timer
     m_packet_buffer.reserve(MAX_BUFFER_SIZE);
     m_last_flush = std::chrono::steady_clock::now();
+    m_last_voice_packet = std::chrono::steady_clock::now();
 
 #ifdef _WIN32
     m_session = WinHttpOpen(
@@ -178,6 +179,12 @@ bool HttpsClient::SendVoicePacket(const char* data, uint32_t len) {
     std::memcpy(&steam_id, data, sizeof(uint64_t));
 
     const uint32_t sequence = ++m_sequence_counter;
+    const auto nowSteady = std::chrono::steady_clock::now();
+    const auto gapMs = std::chrono::duration_cast<std::chrono::milliseconds>(nowSteady - m_last_voice_packet).count();
+    const bool isStart = m_next_starts_stream || gapMs >= START_GAP_MS;
+    m_last_voice_packet = nowSteady;
+    m_next_starts_stream = false;
+
     const uint64_t capture_ms = static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()
@@ -195,7 +202,8 @@ bool HttpsClient::SendVoicePacket(const char* data, uint32_t len) {
         append_uint64_le(m_packet_buffer, steam_id);
         append_uint32_le(m_packet_buffer, sequence);
         append_uint64_le(m_packet_buffer, capture_ms);
-        append_uint32_le(m_packet_buffer, len);
+        const uint32_t lengthWithFlags = len | (isStart ? 0x80000000u : 0);
+        append_uint32_le(m_packet_buffer, lengthWithFlags);
         m_packet_buffer.insert(m_packet_buffer.end(), data, data + len);
 
         if (m_pending_packet_count == 0) {
@@ -212,7 +220,8 @@ bool HttpsClient::SendVoicePacket(const char* data, uint32_t len) {
     }
 
     DEBUG_LOG("Buffered voice packet seq " << sequence << " for steamid " << steam_id
-        << " (" << len << " bytes, buffer=" << buffered_size << " bytes, packets=" << buffered_packets << ")");
+        << " (" << len << " bytes, buffer=" << buffered_size << " bytes, packets=" << buffered_packets
+        << ", start=" << (isStart ? "yes" : "no") << ")");
 
     if (should_flush) {
         return SendBufferedPackets();

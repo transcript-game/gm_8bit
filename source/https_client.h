@@ -27,6 +27,8 @@ private:
     uint32_t m_pending_first_sequence = 0;
     uint32_t m_pending_last_sequence = 0;
     size_t m_pending_packet_count = 0;
+    std::chrono::steady_clock::time_point m_last_voice_packet;
+    bool m_next_starts_stream = true;
 
     std::mutex m_buffer_mutex;
     std::mutex m_send_mutex;
@@ -35,6 +37,7 @@ private:
     // Keep batches large enough to carry ~1s of audio for up to ~128 players while staying under server limit (10MB).
     static constexpr size_t MAX_BUFFER_SIZE = 8 * 1024 * 1024; // 8MB
     static constexpr int FLUSH_INTERVAL_MS = 1000; // target ~1 request/sec per game server
+    static constexpr int START_GAP_MS = 1200; // treat gaps over this as new mic press
 
     bool SendBufferedPackets();
     bool SendBufferedPacketsLocked(std::unique_lock<std::mutex>& lock);
