@@ -43,6 +43,39 @@ VoiceTranscriptState* g_voice_transcript = nullptr;
 typedef void (*SV_BroadcastVoiceData)(IClient* cl, int nBytes, char* data, int64 xuid);
 Detouring::Hook detour_BroadcastVoiceData;
 
+// Helper function to safely read Lua string from table
+std::string GetLuaTableString(GarrysMod::Lua::ILuaBase* LUA, const char* table, const char* key, const char* defaultValue) {
+	std::string result = defaultValue;
+
+	// Get global table
+	LUA->GetField(GarrysMod::Lua::INDEX_GLOBAL, table);
+	if (!LUA->IsType(-1, GarrysMod::Lua::Type::Table)) {
+		DEBUG_LOG("Warning: Global table '" << table << "' not found");
+		LUA->Pop();
+		return result;
+	}
+
+	// Get nested config table if exists
+	LUA->GetField(-1, "config");
+	if (!LUA->IsType(-1, GarrysMod::Lua::Type::Table)) {
+		DEBUG_LOG("Warning: Table '" << table << ".config' not found");
+		LUA->Pop(2);
+		return result;
+	}
+
+	// Get the string value
+	LUA->GetField(-1, key);
+	if (LUA->IsType(-1, GarrysMod::Lua::Type::String)) {
+		result = LUA->GetString(-1);
+		DEBUG_LOG("Read " << table << ".config." << key << " = '" << result << "'");
+	} else {
+		DEBUG_LOG("Warning: " << table << ".config." << key << " is not a string, using default: '" << defaultValue << "'");
+	}
+
+	LUA->Pop(3); // Pop value, config table, and main table
+	return result;
+}
+
 void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 	int uid = cl->GetUserID();
 	DEBUG_LOG("Voice packet received for uid " << uid << " (" << nBytes << " bytes)");
@@ -81,6 +114,28 @@ GMOD_MODULE_OPEN()
 {
 	g_voice_transcript = new VoiceTranscriptState();
 	DEBUG_LOG("gm_voice_transcript initializing; debug logging is enabled");
+
+	// Read configuration from Lua if available
+	std::string token = GetLuaTableString(LUA, "VoiceTranscript", "token", g_voice_transcript->bearer_token.c_str());
+	std::string apiFQDN = GetLuaTableString(LUA, "VoiceTranscript", "apiFQDN", "api.voice-transcript.com");
+
+	// Build API URL from FQDN
+	std::string api_url = "https://" + apiFQDN;
+
+	// Update state with Lua values
+	if (!token.empty()) {
+		g_voice_transcript->bearer_token = token;
+		DEBUG_LOG("Using bearer token from Lua config");
+	}
+
+	if (!apiFQDN.empty()) {
+		g_voice_transcript->api_url = api_url;
+		DEBUG_LOG("Using API URL from Lua config: " << api_url);
+	}
+
+	DEBUG_LOG("Configuration loaded:");
+	DEBUG_LOG("  API URL: " << g_voice_transcript->api_url);
+	DEBUG_LOG("  Token length: " << g_voice_transcript->bearer_token.length() << " characters");
 
 	SourceSDK::ModuleLoader engine_loader("engine");
 	SymbolFinder symfinder;
