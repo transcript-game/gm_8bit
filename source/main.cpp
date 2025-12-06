@@ -79,7 +79,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 
 GMOD_MODULE_OPEN()
 {
-	g_transcript = new transcriptState();
+	g_transcript = new TranscriptState();
 	DEBUG_LOG("gm_transcript initializing; debug logging is enabled");
 
 	SourceSDK::ModuleLoader engine_loader("engine");
