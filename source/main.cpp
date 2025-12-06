@@ -38,7 +38,7 @@
 static char decompressedBuffer[20 * 1024];
 
 HttpsClient* https_client = nullptr;
-EightbitState* g_eightbit = nullptr;
+TranscriptState* g_transcript = nullptr;
 
 typedef void (*SV_BroadcastVoiceData)(IClient* cl, int nBytes, char* data, int64 xuid);
 Detouring::Hook detour_BroadcastVoiceData;
@@ -79,7 +79,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 
 GMOD_MODULE_OPEN()
 {
-	g_eightbit = new EightbitState();
+	g_transcript = new transcriptState();
 	DEBUG_LOG("gm_transcript initializing; debug logging is enabled");
 
 	SourceSDK::ModuleLoader engine_loader("engine");
@@ -102,8 +102,8 @@ GMOD_MODULE_OPEN()
 	detour_BroadcastVoiceData.Enable();
 	DEBUG_LOG("Attached SV_BroadcastVoiceData hook");
 
-	https_client = new HttpsClient(g_eightbit->api_url, g_eightbit->bearer_token);
-	DEBUG_LOG("HTTPS client initialized for " << g_eightbit->api_url);
+	https_client = new HttpsClient(g_transcript->api_url, g_transcript->bearer_token);
+	DEBUG_LOG("HTTPS client initialized for " << g_transcript->api_url);
 
 	// Send initialization request to server
 	if (https_client->SendInit()) {
@@ -123,7 +123,7 @@ GMOD_MODULE_CLOSE()
 	DEBUG_LOG("Detached SV_BroadcastVoiceData hook");
 
 	delete https_client;
-	delete g_eightbit;
+	delete g_transcript;
 	DEBUG_LOG("Cleanup complete");
 
 	return 0;
