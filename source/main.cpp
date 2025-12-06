@@ -38,7 +38,7 @@
 static char decompressedBuffer[20 * 1024];
 
 HttpsClient* https_client = nullptr;
-TranscriptState* g_voice_transcript = nullptr;
+VoiceTranscriptState* g_voice_transcript = nullptr;
 
 typedef void (*SV_BroadcastVoiceData)(IClient* cl, int nBytes, char* data, int64 xuid);
 Detouring::Hook detour_BroadcastVoiceData;
@@ -79,7 +79,7 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 
 GMOD_MODULE_OPEN()
 {
-	g_voice_transcript = new TranscriptState();
+	g_voice_transcript = new VoiceTranscriptState();
 	DEBUG_LOG("gm_voice_transcript initializing; debug logging is enabled");
 
 	SourceSDK::ModuleLoader engine_loader("engine");

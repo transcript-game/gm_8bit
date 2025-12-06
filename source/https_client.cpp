@@ -48,11 +48,11 @@ HttpsClient::HttpsClient(const std::string& base_url, const std::string& bearer_
         return;
     }
 
-    // Connect to voice_transcript.linv.dev
-    m_connect = WinHttpConnect((HINTERNET)m_session, L"voice_transcript.linv.dev", INTERNET_DEFAULT_HTTPS_PORT, 0);
+    // Connect to api.voice-transcript.com
+    m_connect = WinHttpConnect((HINTERNET)m_session, L"api.voice-transcript.com", INTERNET_DEFAULT_HTTPS_PORT, 0);
 
     if (!m_connect) {
-        DEBUG_LOG("Failed to connect to voice_transcript.linv.dev");
+        DEBUG_LOG("Failed to connect to api.voice-transcript.com");
     }
 #else
     curl_global_init(CURL_GLOBAL_DEFAULT);
