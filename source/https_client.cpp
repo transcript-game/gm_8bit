@@ -35,7 +35,7 @@ HttpsClient::HttpsClient(const std::string& base_url, const std::string& bearer_
 
 #ifdef _WIN32
     m_session = WinHttpOpen(
-        L"gm_transcript/1.0",
+        L"gm_voice_transcript/1.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
@@ -48,11 +48,11 @@ HttpsClient::HttpsClient(const std::string& base_url, const std::string& bearer_
         return;
     }
 
-    // Connect to transcript.linv.dev
-    m_connect = WinHttpConnect((HINTERNET)m_session, L"transcript.linv.dev", INTERNET_DEFAULT_HTTPS_PORT, 0);
+    // Connect to voice_transcript.linv.dev
+    m_connect = WinHttpConnect((HINTERNET)m_session, L"voice_transcript.linv.dev", INTERNET_DEFAULT_HTTPS_PORT, 0);
 
     if (!m_connect) {
-        DEBUG_LOG("Failed to connect to transcript.linv.dev");
+        DEBUG_LOG("Failed to connect to voice_transcript.linv.dev");
     }
 #else
     curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -105,7 +105,7 @@ bool HttpsClient::SendInit() {
 
     WinHttpAddRequestHeaders(
         request,
-        L"X-Client-Id: gm_transcript",
+        L"X-Client-Id: gm_voice_transcript",
         (DWORD)-1L,
         WINHTTP_ADDREQ_FLAG_ADD
     );
@@ -150,7 +150,7 @@ bool HttpsClient::SendInit() {
     std::string auth = "Authorization: Bearer " + m_bearer_token;
     headers = curl_slist_append(headers, auth.c_str());
     headers = curl_slist_append(headers, "Content-Type: application/json");
-    headers = curl_slist_append(headers, "X-Client-Id: gm_transcript");
+    headers = curl_slist_append(headers, "X-Client-Id: gm_voice_transcript");
     curl_easy_setopt(m_curl, CURLOPT_HTTPHEADER, headers);
 
     // Empty JSON body

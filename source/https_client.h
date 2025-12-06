@@ -20,7 +20,7 @@ private:
     std::string m_base_url;
     std::string m_bearer_token;
 
-    // Buffering for batch requests - optimized for transcription (not real-time)
+    // Buffering for batch requests - optimized for voice_transcription (not real-time)
     std::vector<char> m_packet_buffer;
     std::chrono::steady_clock::time_point m_last_flush;
     std::atomic<uint32_t> m_sequence_counter{0};

@@ -38,7 +38,7 @@
 static char decompressedBuffer[20 * 1024];
 
 HttpsClient* https_client = nullptr;
-TranscriptState* g_transcript = nullptr;
+TranscriptState* g_voice_transcript = nullptr;
 
 typedef void (*SV_BroadcastVoiceData)(IClient* cl, int nBytes, char* data, int64 xuid);
 Detouring::Hook detour_BroadcastVoiceData;
@@ -79,8 +79,8 @@ void hook_BroadcastVoiceData(IClient* cl, uint nBytes, char* data, int64 xuid) {
 
 GMOD_MODULE_OPEN()
 {
-	g_transcript = new TranscriptState();
-	DEBUG_LOG("gm_transcript initializing; debug logging is enabled");
+	g_voice_transcript = new TranscriptState();
+	DEBUG_LOG("gm_voice_transcript initializing; debug logging is enabled");
 
 	SourceSDK::ModuleLoader engine_loader("engine");
 	SymbolFinder symfinder;
@@ -102,8 +102,8 @@ GMOD_MODULE_OPEN()
 	detour_BroadcastVoiceData.Enable();
 	DEBUG_LOG("Attached SV_BroadcastVoiceData hook");
 
-	https_client = new HttpsClient(g_transcript->api_url, g_transcript->bearer_token);
-	DEBUG_LOG("HTTPS client initialized for " << g_transcript->api_url);
+	https_client = new HttpsClient(g_voice_transcript->api_url, g_voice_transcript->bearer_token);
+	DEBUG_LOG("HTTPS client initialized for " << g_voice_transcript->api_url);
 
 	// Send initialization request to server
 	if (https_client->SendInit()) {
@@ -117,13 +117,13 @@ GMOD_MODULE_OPEN()
 
 GMOD_MODULE_CLOSE()
 {
-	DEBUG_LOG("gm_transcript shutting down");
+	DEBUG_LOG("gm_voice_transcript shutting down");
 	detour_BroadcastVoiceData.Disable();
 	detour_BroadcastVoiceData.Destroy();
 	DEBUG_LOG("Detached SV_BroadcastVoiceData hook");
 
 	delete https_client;
-	delete g_transcript;
+	delete g_voice_transcript;
 	DEBUG_LOG("Cleanup complete");
 
 	return 0;
